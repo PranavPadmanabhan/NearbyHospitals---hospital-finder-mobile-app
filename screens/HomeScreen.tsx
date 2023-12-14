@@ -33,9 +33,9 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
-  const getUser = async() => {
+  const getUser = async () => {
     const userData = await AsyncStorage.getItem("user")!
-    if(userData){
+    if (userData) {
       setUser(JSON.parse(userData!))
     }
   }
@@ -48,9 +48,18 @@ const HomeScreen = ({ navigation }: any) => {
       if (res) {
 
         Geolocation.getCurrentPosition(
-          (position) => {
-            fetchHospitals(position.coords.longitude, position.coords.latitude)
-            setLocation(position)
+          async (position) => {
+            const locationFromStorage = await AsyncStorage.getItem("location")!
+            const locationObj = JSON.parse(locationFromStorage!)
+            if (locationObj && locationObj.coords.longitude !== position.coords.longitude && locationObj.coords.latitude !== position.coords.latitude) {
+              fetchHospitals(position.coords.longitude, position.coords.latitude, true)
+            }
+            else {
+              await AsyncStorage.setItem('location', JSON.stringify(position));
+              fetchHospitals(position.coords.longitude, position.coords.latitude)
+              setLocation(position)
+
+            }
           },
           (error) => {
             setLocation(null)
@@ -63,11 +72,10 @@ const HomeScreen = ({ navigation }: any) => {
   };
 
 
-  const fetchHospitals = async (longitude: any, latitude: any) => {
+  const fetchHospitals = async (longitude: any, latitude: any, needReFetching?: boolean) => {
     const url = `https://api.geoapify.com/v2/places?categories=healthcare.hospital&bias=proximity:${longitude},${latitude}&limit=10&apiKey=d80112d504774c2bbb2b3c524b539659`
     try {
-      const hospitalsData = await AsyncStorage.getItem('hospitals')!;
-      if (!hospitalsData) {
+      if (needReFetching) {
         const res = await fetch(url)
         const data = await res.json()
         setHospitals(data.features)
@@ -75,8 +83,18 @@ const HomeScreen = ({ navigation }: any) => {
         setLoading(false)
       }
       else {
-        setHospitals(JSON.parse(hospitalsData!))
-        setLoading(false)
+        const hospitalsData = await AsyncStorage.getItem('hospitals')!;
+        if (!hospitalsData) {
+          const res = await fetch(url)
+          const data = await res.json()
+          setHospitals(data.features)
+          await AsyncStorage.setItem('hospitals', JSON.stringify(data.features));
+          setLoading(false)
+        }
+        else {
+          setHospitals(JSON.parse(hospitalsData!))
+          setLoading(false)
+        }
       }
     } catch (error) {
       console.log(error)
@@ -84,6 +102,13 @@ const HomeScreen = ({ navigation }: any) => {
     }
   }
 
+  const checkUserLocationChanged = () => {
+    try {
+
+    } catch (error) {
+
+    }
+  }
 
   useEffect(() => {
     getUser()
@@ -96,7 +121,7 @@ const HomeScreen = ({ navigation }: any) => {
       <View style={styles.container}>
         <AppBar navigation={navigation} />
         <ImageBackground source={{ uri: backgroundImgUrl }} style={styles.imageBackground}>
-          <Text style={styles.desc} >Hi <Text style={{color:"#d834eb"}}>{user?.user?.givenName??""}</Text>, We need your location to find the nearby hospitals and we ensure you're never far from medical assistance</Text>
+          <Text style={styles.desc} >Hi <Text style={{ color: "#d834eb" }}>{user?.user?.givenName ?? ""}</Text>, We need your location to find the nearby hospitals and we ensure you're never far from medical assistance</Text>
           <Pressable onPress={() => {
             if (!loading) getLocation()
           }} style={styles.btn}>
